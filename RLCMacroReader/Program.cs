@@ -3,65 +3,267 @@ using System.IO;
 using System.IO.Ports;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Serialization;
 
 namespace RLCMacroReader
 {
     class Program
     {
         public static SerialPort sp;
-        
+        public static Settings settings;
+        public static readonly string _TIMEOUT = "TIMEOUT";
         
         static void Main(string[] args)
         {
-            Console.WriteLine("Serial port name:");
-            string portname = Console.ReadLine();
+           switch (args.Length)
+           {
+                case 0:
+                    Console.WriteLine("please specify options:" + Environment.NewLine);
+                    ShowHelp();
+                    break;
 
-            Console.WriteLine("Please enter user number:");
-            string user = Console.ReadLine();
-
-            Console.WriteLine("Please enter password:");
-            string pw = Console.ReadLine();
-
-            sp = new SerialPort(portname, 19200, Parity.None, 8, StopBits.One)
-            {
-                ReadTimeout = 2500
-            };
-
-            try
-            {
-                sp.Open();
-                string response = SendReceive(sp, "187 " + user + " " + pw + '\n');
-
-                using (StreamWriter sw = new StreamWriter("macros.txt"))
-                {
-                    sw.WriteLine("Automatic macros...");
-
-                    for (int m = 200; m < 500; m++)
+                case 1:
+                    switch (args[0])
                     {
-                        Console.WriteLine("Checking macro {0}...", m);
-                        response = SendReceive(sp, "054 " + m.ToString("000") + '\n');
+                        case "cfg":
+                            ShowCommSettings();
+                            break;
 
-                        if (!response.ToLower().Contains("this macro is 0 percent full"))
-                        {
-                            sw.WriteLine(response + Environment.NewLine);
-                        }
+                        default:
+                            Console.WriteLine("'{0}' is not supported.", args[0]);
+                            break;
                     }
 
-                    sw.WriteLine("\nUser macros...");
-
-                    for (int m = 500; m < 1000; m++)
+                    break;
+                
+                
+                case 2:
+                    switch (args[0])
                     {
-                        Console.WriteLine("Checking macro {0}...", m);
-                        response = SendReceive(sp, "054 " + m.ToString("000") + '\n');
+                        case "cfg":
+                            SetCommSettings(args[1]);
+                            break;
 
-                        if (!response.ToLower().Contains("this macro is 0 percent full"))
-                        {
-                            sw.WriteLine(response + Environment.NewLine);
-                        }
+                        case "f":
+                            ReadMacros(args[1]);
+                            break;
+                        
+                        default:
+                            Console.WriteLine("'{0}' is not supported.", args[0]);
+                            break;
+                    }
+
+                    break;
+
+                default:
+                    Console.WriteLine("unsupported options:" + Environment.NewLine);
+                    ShowHelp();
+                    break;
+            }
+        }
+
+        private static bool SetCommSettings(string commsettings)
+        {
+            bool stat = true;
+
+            string[] p = commsettings.Split(",");
+
+            if (p.Length != 5)
+            {
+                return false;
+            }
+
+            settings = new Settings
+            {
+                PortName = p[0]
+            };
+
+            if (!int.TryParse(p[1], out settings.Baudrate))
+            {
+                return false;
+            }
+
+            if (!Enum.TryParse<Parity>(p[2], out settings.Parity))
+            {
+                return false;
+            }
+
+            if (!int.TryParse(p[3], out settings.Databits))
+            {
+                return false;
+            }
+
+            if (!Enum.TryParse<StopBits>(p[4], out settings.StopBits))
+            {
+                return false;
+            }
+
+            SaveSettings();
+            return stat;
+        }
+
+        private static void SaveSettings()
+        {
+            XmlSerializer xmlWriter = new XmlSerializer(typeof(Settings));
+
+            using (FileStream fs = File.Create("settings.xml"))
+            {
+                xmlWriter.Serialize(fs, settings);
+            }
+        }
+
+        private static bool LoadSettings()
+        {
+            bool stat = true;
+            settings = new Settings();
+
+            if (File.Exists("settings.xml"))
+            {
+                XmlSerializer xmlSerializer = new XmlSerializer(typeof(Settings));
+
+                try
+                {
+                    using (StreamReader file = new StreamReader("settings.xml"))
+                    {
+                        settings = (Settings)xmlSerializer.Deserialize(file);
                     }
                 }
 
-                response = SendReceive(sp, "189" + '\n');
+                catch (Exception ex)
+                {
+                    stat = false;
+                }
+            }
+
+            return stat;
+
+        }
+
+
+        private static void ShowCommSettings()
+        {
+            string msg = "";
+
+
+            if (LoadSettings())
+            {
+                Console.WriteLine("Serial Port Settings:");
+
+                msg = "Portname: " + settings.PortName + Environment.NewLine +
+                             "Baudrate: " + settings.Baudrate.ToString() + Environment.NewLine +
+                             "Parity: " + settings.Parity.ToString() + Environment.NewLine +
+                             "Databits: " + settings.Databits.ToString() + Environment.NewLine +
+                             "Stopbits: " + settings.StopBits.ToString();
+            }
+
+            else
+            {
+                msg = "Unable to read comm settings.";
+            }
+
+
+            Console.WriteLine(msg);                 
+        }
+
+        private static void ShowHelp()
+        {
+            Console.WriteLine("RLCMacroReader [options]");
+
+            string msg = "[cfg] - show comm settings" + Environment.NewLine +
+                         "[cfg <portname,baudrate,parity,databits,stopbits>] comm settings, ie:com3,19200,None,8,1" + Environment.NewLine +
+                         "[f <filename>] file to save macros to"; 
+           }
+
+
+        static void ReadMacros(string filename)
+        {
+            bool ok = true;
+
+            if (!LoadSettings())
+            {
+                Console.WriteLine("Cancelled. Could not load comm settings.");
+                return;
+            }
+
+            sp = new SerialPort(settings.PortName, settings.Baudrate, settings.Parity, settings.Databits, settings.StopBits)
+            {
+                ReadTimeout = 2500
+            };
+            
+ 
+            try
+            {
+                sp.Open();
+
+                // log in
+                Console.WriteLine("Please enter user number:");
+                string user = Console.ReadLine();
+
+                Console.WriteLine("Please enter password:");
+                string pw = Console.ReadLine();
+
+                string response = SendReceive(sp, "187 " + user + " " + pw + '\n');
+
+                if (response == _TIMEOUT)
+                {
+                    Console.WriteLine("Reading macros stopped, comm timeout.");
+                    ok = false;
+                }
+                
+                if (ok && response.ToLower().Contains("logged in"))
+                {
+                    using (StreamWriter sw = new StreamWriter(filename))
+                    {
+                        // record the Automatic macros
+                        sw.WriteLine("Automatic macros...");
+
+                        for (int m = 200; m < 500; m++)
+                        {
+                            Console.WriteLine("Checking macro {0}...", m);
+                            response = SendReceive(sp, "054 " + m.ToString("000") + '\n');
+                            ok = (response == _TIMEOUT) ? false : true;
+
+                            if (!ok)
+                            {
+                                break;
+                            }
+
+                            else if (!response.ToLower().Contains("this macro is 0 percent full"))
+                            {
+                                sw.WriteLine(response + Environment.NewLine);
+                            }
+                        }
+
+                        sw.WriteLine("\nUser macros...");
+
+                        if (ok)
+                        {
+                            for (int m = 500; m < 1000; m++)
+                            {
+                                Console.WriteLine("Checking macro {0}...", m);
+                                response = SendReceive(sp, "054 " + m.ToString("000") + '\n');
+                                ok = (response == _TIMEOUT) ? false : true;
+
+                                if (!ok)
+                                {
+                                    break;
+                                }
+
+                                else if (!response.ToLower().Contains("this macro is 0 percent full"))
+                                {
+                                    sw.WriteLine(response + Environment.NewLine);
+                                }
+                            }
+                        }
+                    }
+
+                    response = SendReceive(sp, "189" + '\n');
+                }
+
+                else
+                {
+                    Console.WriteLine("Unable to sign in to controller.");
+                }
             }
 
             catch (Exception ex)
@@ -96,7 +298,7 @@ namespace RLCMacroReader
 
             catch (Exception ex)
             {
-
+                r = _TIMEOUT;
             }
 
             return r;
