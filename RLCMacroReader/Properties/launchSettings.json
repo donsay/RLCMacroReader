@@ -2,7 +2,7 @@
   "profiles": {
     "RLCMacroReader": {
       "commandName": "Project",
-      "commandLineArgs": "f macros.txt"
+      "commandLineArgs": "ha bg v"
     }
   }
 }

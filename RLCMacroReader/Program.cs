@@ -23,12 +23,16 @@ namespace RLCMacroReader
                     break;
 
                 case 1:
-                    switch (args[0])
+                    switch (args[0].ToLower())
                     {
                         case "cfg":
                             ShowCommSettings();
                             break;
 
+                        case "f":
+                            Console.WriteLine("Usage is: RLCMacroReader f <filename>");
+                            return;
+                        
                         default:
                             Console.WriteLine("'{0}' is not supported.", args[0]);
                             break;
@@ -38,10 +42,18 @@ namespace RLCMacroReader
                 
                 
                 case 2:
-                    switch (args[0])
+                    switch (args[0].ToLower())
                     {
                         case "cfg":
-                            SetCommSettings(args[1]);
+                            if(!SetCommSettings(args[1]))
+                            {
+                                string msg = "Invalid comm settings. Usage is" + Environment.NewLine +
+                                             "RLCMacroReader cfg <portname,baudrate,parity,databits,stopbits>" + Environment.NewLine +
+                                             "for example: RLCMacroReader cfg com4,19200,None,8,1";
+
+                                Console.WriteLine(msg);
+                            }
+
                             break;
 
                         case "f":
@@ -56,7 +68,7 @@ namespace RLCMacroReader
                     break;
 
                 default:
-                    Console.WriteLine("unsupported options:" + Environment.NewLine);
+                    Console.WriteLine("Unsupported number of arguments. See usage below:" + Environment.NewLine);
                     ShowHelp();
                     break;
             }
@@ -171,8 +183,10 @@ namespace RLCMacroReader
 
             string msg = "[cfg] - show comm settings" + Environment.NewLine +
                          "[cfg <portname,baudrate,parity,databits,stopbits>] comm settings, ie:com3,19200,None,8,1" + Environment.NewLine +
-                         "[f <filename>] file to save macros to"; 
-           }
+                         "[f <filename>] file to save macros to";
+
+            Console.WriteLine(msg);
+        }
 
 
         static void ReadMacros(string filename)
@@ -189,8 +203,7 @@ namespace RLCMacroReader
             {
                 ReadTimeout = 2500
             };
-            
- 
+          
             try
             {
                 sp.Open();
@@ -206,8 +219,8 @@ namespace RLCMacroReader
 
                 if (response == _TIMEOUT)
                 {
-                    Console.WriteLine("Reading macros stopped, comm timeout.");
-                    ok = false;
+                    Console.WriteLine("Timeout, controller did not respond.");
+                    return;
                 }
                 
                 if (ok && response.ToLower().Contains("logged in"))
@@ -280,6 +293,7 @@ namespace RLCMacroReader
         private static string SendReceive(SerialPort port, string msg)
         {
             string r = "";
+            byte[] rxBuf = new byte[1024];
             byte[] data = Encoding.ASCII.GetBytes(msg);
 
             try
@@ -287,19 +301,26 @@ namespace RLCMacroReader
                 sp.Write(data, 0, data.Length);
 
                 Task.Delay(250).Wait();
+                int bytes = port.Read(rxBuf, 0, 1024);
 
-                if (port.BytesToRead > 0)
+                if (bytes > 0)
                 {
-                    byte[] buf = new byte[port.BytesToRead];
-                    port.Read(buf, 0, port.BytesToRead);
+                    byte[] buf = new byte[bytes];
+                    Array.Copy(rxBuf, 0, buf, 0, bytes);
                     r = Encoding.ASCII.GetString(buf);
                 }
             }
 
-            catch (Exception ex)
+            catch (TimeoutException)
             {
                 r = _TIMEOUT;
             }
+
+            catch (Exception ex)
+            {
+                r = ex.Message;
+            }
+
 
             return r;
         }
