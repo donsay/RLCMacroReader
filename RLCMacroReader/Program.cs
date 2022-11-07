@@ -201,7 +201,7 @@ namespace RLCMacroReader
 
             sp = new SerialPort(settings.PortName, settings.Baudrate, settings.Parity, settings.Databits, settings.StopBits)
             {
-                ReadTimeout = 2500
+                ReadTimeout = 2500,
             };
           
             try
@@ -215,7 +215,7 @@ namespace RLCMacroReader
                 Console.WriteLine("Please enter password:");
                 string pw = Console.ReadLine();
 
-                string response = SendReceive(sp, "187 " + user + " " + pw + '\n');
+                string response = SendReceive(sp, "187 " + user + " " + pw);
 
                 if (response == _TIMEOUT)
                 {
@@ -233,7 +233,7 @@ namespace RLCMacroReader
                         for (int m = 200; m < 500; m++)
                         {
                             Console.WriteLine("Checking macro {0}...", m);
-                            response = SendReceive(sp, "054 " + m.ToString("000") + '\n');
+                            response = SendReceive(sp, "054 " + m.ToString("000"));
                             ok = (response == _TIMEOUT) ? false : true;
 
                             if (!ok)
@@ -254,7 +254,7 @@ namespace RLCMacroReader
                             for (int m = 500; m < 1000; m++)
                             {
                                 Console.WriteLine("Checking macro {0}...", m);
-                                response = SendReceive(sp, "054 " + m.ToString("000") + '\n');
+                                response = SendReceive (sp, "054 " + m.ToString("000"));
                                 ok = (response == _TIMEOUT) ? false : true;
 
                                 if (!ok)
@@ -270,7 +270,7 @@ namespace RLCMacroReader
                         }
                     }
 
-                    response = SendReceive(sp, "189" + '\n');
+                    response = SendReceive(sp, "189");
                 }
 
                 else
@@ -294,20 +294,44 @@ namespace RLCMacroReader
         {
             string r = "";
             byte[] rxBuf = new byte[1024];
-            byte[] data = Encoding.ASCII.GetBytes(msg);
+            byte[] data = Encoding.ASCII.GetBytes(msg + '\r' + '\n');
 
             try
             {
+                string TxCmd = msg.Substring(0, 3);
+                string RxCmd = "";
+
+                sp.DiscardInBuffer();
+                sp.DiscardOutBuffer();
                 sp.Write(data, 0, data.Length);
 
-                Task.Delay(250).Wait();
-                int bytes = port.Read(rxBuf, 0, 1024);
+                Task.Delay(2000).Wait();
+                int bytes = port.BaseStream.Read(rxBuf, 0, 1024);
 
                 if (bytes > 0)
                 {
                     byte[] buf = new byte[bytes];
+
                     Array.Copy(rxBuf, 0, buf, 0, bytes);
                     r = Encoding.ASCII.GetString(buf);
+                    RxCmd = r.Substring(0, 3);
+
+                    // if the command has been returned in the result, take the command out
+                    int pos;
+
+                    if (RxCmd == TxCmd)
+                    {
+                        pos = r.IndexOf('\n', 0);
+                        r = r.Substring(pos + 1, r.Length - pos -1);
+                    }
+
+                    // now strip off all the termininating stuff
+                    pos = r.IndexOf("OK", 0);
+
+                    if (pos > -1)
+                    {
+                        r = r.Substring(0, pos);
+                    }
                 }
             }
 
@@ -323,6 +347,7 @@ namespace RLCMacroReader
 
 
             return r;
+
         }
     }
 
