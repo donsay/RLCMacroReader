@@ -1,6 +1,6 @@
 # RLCMacroReader
 This is a VS2019 CSharp Net Core 3.1 Console app for reading the macros from an RLC Club repeater controller.
-It executes command 054 on macros 200-499 (Automatic) and 500-999 (user defined), and saves the data to 
+It executes command 054 on macros 200-499 (Automatic) and 500-999 (User Defined), and saves the data to 
 text file specified on the command line.
 
 Usage:
