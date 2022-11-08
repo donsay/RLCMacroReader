@@ -95,6 +95,29 @@ namespace RLCMacroReader
                 return false;
             }
 
+            // parity need to be fully spelled out, first letter capitalized;
+            // so handle the common errors
+            switch (p[2])
+            {
+                case "E":
+                case "e":
+                case "even":
+                    p[2] = "Even";
+                    break;
+
+                case "N":
+                case "n":
+                case "none":
+                    p[2] = "None";
+                    break;
+
+                case "O":
+                case "o":
+                case "odd":
+                    p[2] = "Odd";
+                    break;
+            }
+
             if (!Enum.TryParse<Parity>(p[2], out settings.Parity))
             {
                 return false;
@@ -111,6 +134,7 @@ namespace RLCMacroReader
             }
 
             SaveSettings();
+            ShowCommSettings();
             return stat;
         }
 
@@ -151,7 +175,6 @@ namespace RLCMacroReader
 
         }
 
-
         private static void ShowCommSettings()
         {
             string msg = "";
@@ -162,10 +185,10 @@ namespace RLCMacroReader
                 Console.WriteLine("Serial Port Settings:");
 
                 msg = "Portname: " + settings.PortName + Environment.NewLine +
-                             "Baudrate: " + settings.Baudrate.ToString() + Environment.NewLine +
-                             "Parity: " + settings.Parity.ToString() + Environment.NewLine +
-                             "Databits: " + settings.Databits.ToString() + Environment.NewLine +
-                             "Stopbits: " + settings.StopBits.ToString();
+                      "Baudrate: " + settings.Baudrate.ToString() + Environment.NewLine +
+                      "Parity: " + settings.Parity.ToString() + Environment.NewLine +
+                      "Databits: " + settings.Databits.ToString() + Environment.NewLine +
+                      "Stopbits: " + settings.StopBits.ToString();
             }
 
             else

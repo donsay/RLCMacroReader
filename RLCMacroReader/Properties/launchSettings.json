@@ -2,7 +2,7 @@
   "profiles": {
     "RLCMacroReader": {
       "commandName": "Project",
-      "commandLineArgs": "f macros.txt"
+      "commandLineArgs": "cfg com2,19200,None,8,1"
     }
   }
 }
