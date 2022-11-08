@@ -9,5 +9,5 @@ RLCMacroReader [cfg] - show comm settings
 
 RLCMacroReader [cfg <portname,baudrate,parity,databits,stopbits>] - set comm settings, ie:com3,19200,None,8,1
 
-RLCMacroReader [f <filename>] - read macros, and save to the file named <filename>
+RLCMacroReader [f filename] - read macros, and save to the file named <filename>
 
