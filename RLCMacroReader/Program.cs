@@ -41,7 +41,6 @@ namespace RLCMacroReader
 
                     break;
                 
-                
                 case 2:
                     switch (args[0].ToLower())
                     {
@@ -173,13 +172,11 @@ namespace RLCMacroReader
             }
 
             return stat;
-
         }
 
         private static void ShowCommSettings()
         {
             string msg = "";
-
 
             if (LoadSettings())
             {
@@ -197,7 +194,6 @@ namespace RLCMacroReader
                 msg = "Unable to read comm settings.";
             }
 
-
             Console.WriteLine(msg);                 
         }
 
@@ -211,7 +207,6 @@ namespace RLCMacroReader
 
             Console.WriteLine(msg);
         }
-
 
         static void ReadMacros(string filename)
         {
@@ -233,20 +228,37 @@ namespace RLCMacroReader
                 sp.Open();
 
                 // log in
+                string msg = "If macro commands are not under a security level," + Environment.NewLine +
+                             "just press <Enter> for the next two prompts.";
+
+                Console.WriteLine(msg);
+
                 Console.WriteLine("Please enter user number:");
                 string user = Console.ReadLine();
 
                 Console.WriteLine("Please enter password:");
                 string pw = Console.ReadLine();
 
-                string response = SendReceive(sp, "187 " + user + " " + pw);
+                string response;
 
-                if (response == _TIMEOUT)
+                // if no user and password, just assume all is OK
+                if (user.Length > 0 && pw.Length > 0)
                 {
-                    Console.WriteLine("Timeout, controller did not respond.");
-                    return;
+                    response = SendReceive(sp, "187 " + user + " " + pw);
+
+                    if (response == _TIMEOUT)
+                    {
+                        Console.WriteLine("Timeout, controller did not respond.");
+                        return;
+                    }
                 }
-                
+
+                else
+                {
+                    response = "logged in";
+                }
+
+                Console.WriteLine("Here we go. This could take a while.");
                 if (ok && response.ToLower().Contains("logged in"))
                 {
                     using (StreamWriter sw = new StreamWriter(filename))
@@ -272,7 +284,7 @@ namespace RLCMacroReader
                         }
 
                         sw.WriteLine("\nUser macros...");
-
+                        
                         if (ok)
                         {
                             for (int m = 500; m < 1000; m++)
@@ -280,7 +292,7 @@ namespace RLCMacroReader
                                 Console.WriteLine("Checking macro {0}...", m);
                                 response = SendReceive (sp, "054 " + m.ToString("000"));
                                 ok = (response == _TIMEOUT) ? false : true;
-
+                                
                                 if (!ok)
                                 {
                                     break;
@@ -317,25 +329,25 @@ namespace RLCMacroReader
         private static string SendReceive(SerialPort port, string msg)
         {
             string r = "";
-            byte[] rxBuf = new byte[1024];
+            int rxBufSize = 1024;
+            byte[] rxBuf = new byte[rxBufSize];
             byte[] data = Encoding.ASCII.GetBytes(msg + '\r' + '\n');
 
             try
             {
-                string TxCmd = msg.Substring(0, 3);
                 string RxCmd = "";
+                string TxCmd = msg.Substring(0, 3);
 
                 sp.DiscardInBuffer();
                 sp.DiscardOutBuffer();
                 sp.Write(data, 0, data.Length);
 
                 Task.Delay(2000).Wait();
-                int bytes = port.BaseStream.Read(rxBuf, 0, 1024);
+                int bytes = port.BaseStream.Read(rxBuf, 0, rxBuf.Length);
 
                 if (bytes > 0)
                 {
                     byte[] buf = new byte[bytes];
-
                     Array.Copy(rxBuf, 0, buf, 0, bytes);
                     r = Encoding.ASCII.GetString(buf);
                     RxCmd = r.Substring(0, 3);
@@ -369,11 +381,7 @@ namespace RLCMacroReader
                 r = ex.Message;
             }
 
-
             return r;
-
         }
     }
-
-
 }
