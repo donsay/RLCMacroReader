@@ -343,7 +343,29 @@ namespace RLCMacroReader
                 sp.Write(data, 0, data.Length);
 
                 Task.Delay(2000).Wait();
-                int bytes = port.BaseStream.Read(rxBuf, 0, rxBuf.Length);
+
+                int b;
+                int p = 0;
+                bool done = false;
+
+                while (!done && (p < rxBufSize))
+                {
+                    b = port.ReadByte();
+                    rxBuf[p] = (byte)b;
+
+                    if (p > 4)
+                    {
+                        // stop when we see 'DTMF>'
+                        if (rxBuf[p] == '>' && rxBuf[p - 1] == 'F' && rxBuf[p - 2] == 'M' && rxBuf[p - 3] == 'T' && rxBuf[p - 4] == 'D')
+                        {
+                            done = true;
+                        }
+                    }
+
+                    p++;
+                }
+
+                int bytes = p;
 
                 if (bytes > 0)
                 {
