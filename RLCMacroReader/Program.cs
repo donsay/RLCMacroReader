@@ -197,6 +197,18 @@ namespace RLCMacroReader
             Console.WriteLine(msg);                 
         }
 
+        private static void ShowDisclaimer()
+        {
+            string msg = "RLCMacroReader is provided FREE of charge." + Environment.NewLine +
+                         "Reasonable effort has been made to insure that it" + Environment.NewLine +
+                         "will not have any adverse effects on connected devices." + Environment.NewLine +
+                         "However, the author assumes no liability for any malfunction or loss of data." + Environment.NewLine;
+
+            Console.WriteLine(msg);
+        }
+
+
+
         private static void ShowHelp()
         {
             Console.WriteLine("RLCMacroReader [options]");
@@ -225,23 +237,31 @@ namespace RLCMacroReader
           
             try
             {
-                sp.Open();
+                ShowDisclaimer();
 
                 // log in
                 string msg = "If macro commands are not under a security level," + Environment.NewLine +
-                             "just press <Enter> for the next two prompts.";
+                             "just press <Enter> for the next two prompts." + Environment.NewLine +
+                             "To exit, enter 'exit' at the user prompt and press <Enter>.";
 
                 Console.WriteLine(msg);
 
                 Console.WriteLine("Please enter user number:");
                 string user = Console.ReadLine();
 
+                if (user.ToLower() == "exit")
+                {
+                    return;
+                }
+
                 Console.WriteLine("Please enter password:");
                 string pw = Console.ReadLine();
 
+                sp.Open();
                 string response;
 
-                // if no user and password, just assume all is OK
+                // if no user and password, just assume all is OK;
+                // otherwise use them to sign in
                 if (user.Length > 0 && pw.Length > 0)
                 {
                     response = SendReceive(sp, "187 " + user + " " + pw);
@@ -258,10 +278,14 @@ namespace RLCMacroReader
                     response = "logged in";
                 }
 
+                FileInfo fi = new FileInfo(filename);
+                string fname = fi.Name.Remove(fi.Name.IndexOf(fi.Extension));
+                fname = fname + "_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + fi.Extension;
+
                 Console.WriteLine("Here we go. This could take a while.");
                 if (ok && response.ToLower().Contains("logged in"))
                 {
-                    using (StreamWriter sw = new StreamWriter(filename))
+                    using (StreamWriter sw = new StreamWriter(fname))
                     {
                         // record the Automatic macros
                         sw.WriteLine("Automatic macros...");
@@ -270,11 +294,16 @@ namespace RLCMacroReader
                         {
                             Console.WriteLine("Checking macro {0}...", m);
                             response = SendReceive(sp, "054 " + m.ToString("000"));
-                            ok = (response == _TIMEOUT) ? false : true;
+
+                            if (response == _TIMEOUT || response.Contains("Error"))
+                            {
+                                ok = false;
+                            }
 
                             if (!ok)
                             {
-                                break;
+                                Console.WriteLine(response);
+                                return;
                             }
 
                             else if (!response.ToLower().Contains("this macro is 0 percent full"))
@@ -291,11 +320,16 @@ namespace RLCMacroReader
                             {
                                 Console.WriteLine("Checking macro {0}...", m);
                                 response = SendReceive (sp, "054 " + m.ToString("000"));
-                                ok = (response == _TIMEOUT) ? false : true;
-                                
+
+                                if (response == _TIMEOUT || response.Contains("Error"))
+                                {
+                                    ok = false;
+                                }
+
                                 if (!ok)
                                 {
-                                    break;
+                                    Console.WriteLine(response);
+                                    return;
                                 }
 
                                 else if (!response.ToLower().Contains("this macro is 0 percent full"))
@@ -365,12 +399,10 @@ namespace RLCMacroReader
                     p++;
                 }
 
-                int bytes = p;
-
-                if (bytes > 0)
+                if (p > 0)
                 {
-                    byte[] buf = new byte[bytes];
-                    Array.Copy(rxBuf, 0, buf, 0, bytes);
+                    byte[] buf = new byte[p];
+                    Array.Copy(rxBuf, 0, buf, 0, p);
                     r = Encoding.ASCII.GetString(buf);
                     RxCmd = r.Substring(0, 3);
 
