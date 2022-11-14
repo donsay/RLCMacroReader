@@ -202,7 +202,7 @@ namespace RLCMacroReader
             string msg = "RLCMacroReader is provided FREE of charge." + Environment.NewLine +
                          "Reasonable effort has been made to insure that it" + Environment.NewLine +
                          "will not have any adverse effects on connected devices." + Environment.NewLine +
-                         "However, the author assumes no liability for any malfunction or loss of data." + Environment.NewLine;
+                         "However, the author assumes no liability for any loss of data." + Environment.NewLine;
 
             Console.WriteLine(msg);
         }
@@ -223,6 +223,7 @@ namespace RLCMacroReader
         static void ReadMacros(string filename)
         {
             bool ok = true;
+            bool loggedin = false;
 
             if (!LoadSettings())
             {
@@ -270,6 +271,11 @@ namespace RLCMacroReader
                     {
                         Console.WriteLine("Timeout, controller did not respond.");
                         return;
+                    }
+
+                    else if (response.ToLower().Contains("logged in"))
+                    {
+                        loggedin = true;
                     }
                 }
 
@@ -340,7 +346,10 @@ namespace RLCMacroReader
                         }
                     }
 
-                    response = SendReceive(sp, "189");
+                    if (loggedin)
+                    {
+                        response = SendReceive(sp, "189");
+                    }
                 }
 
                 else
