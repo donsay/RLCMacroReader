@@ -1,4 +1,5 @@
-﻿using System;
+﻿// RLCMacroReader by Don Sayler W7OXR
+using System;
 using System.IO;
 using System.IO.Ports;
 using System.Text;
@@ -39,7 +40,6 @@ namespace RLCMacroReader
                     }
 
                     break;
-                
                 
                 case 2:
                     switch (args[0].ToLower())
@@ -172,13 +172,11 @@ namespace RLCMacroReader
             }
 
             return stat;
-
         }
 
         private static void ShowCommSettings()
         {
             string msg = "";
-
 
             if (LoadSettings())
             {
@@ -196,9 +194,20 @@ namespace RLCMacroReader
                 msg = "Unable to read comm settings.";
             }
 
-
             Console.WriteLine(msg);                 
         }
+
+        private static void ShowDisclaimer()
+        {
+            string msg = "RLCMacroReader is provided FREE of charge." + Environment.NewLine +
+                         "Reasonable effort has been made to insure that it" + Environment.NewLine +
+                         "will not have any adverse effects on connected devices." + Environment.NewLine +
+                         "However, the author assumes no liability for any loss of data." + Environment.NewLine;
+
+            Console.WriteLine(msg);
+        }
+
+
 
         private static void ShowHelp()
         {
@@ -211,10 +220,10 @@ namespace RLCMacroReader
             Console.WriteLine(msg);
         }
 
-
         static void ReadMacros(string filename)
         {
             bool ok = true;
+            bool loggedin = false;
 
             if (!LoadSettings())
             {
@@ -229,26 +238,60 @@ namespace RLCMacroReader
           
             try
             {
-                sp.Open();
+                ShowDisclaimer();
 
                 // log in
+                string msg = "If macro commands are not under a security level," + Environment.NewLine +
+                             "just press <Enter> for the next two prompts." + Environment.NewLine +
+                             "To exit, enter 'exit' at the user prompt and press <Enter>.";
+
+                Console.WriteLine(msg);
+
                 Console.WriteLine("Please enter user number:");
                 string user = Console.ReadLine();
+
+                if (user.ToLower() == "exit")
+                {
+                    return;
+                }
 
                 Console.WriteLine("Please enter password:");
                 string pw = Console.ReadLine();
 
-                string response = SendReceive(sp, "187 " + user + " " + pw);
+                sp.Open();
+                string response;
 
-                if (response == _TIMEOUT)
+                // if no user and password, just assume all is OK;
+                // otherwise use them to sign in
+                if (user.Length > 0 && pw.Length > 0)
                 {
-                    Console.WriteLine("Timeout, controller did not respond.");
-                    return;
+                    response = SendReceive(sp, "187 " + user + " " + pw);
+
+                    if (response == _TIMEOUT)
+                    {
+                        Console.WriteLine("Timeout, controller did not respond.");
+                        return;
+                    }
+
+                    else if (response.ToLower().Contains("logged in"))
+                    {
+                        loggedin = true;
+                    }
                 }
-                
+
+                else
+                {
+                    response = "logged in";
+                }
+
+                FileInfo fi = new FileInfo(filename);
+                string fname = fi.Name.Remove(fi.Name.IndexOf(fi.Extension));
+                fname = fname + "_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + fi.Extension;
+
+                Console.WriteLine("Here we go. This could take a while.");
                 if (ok && response.ToLower().Contains("logged in"))
                 {
-                    using (StreamWriter sw = new StreamWriter(filename))
+                    using (StreamWriter sw = new StreamWriter(fname))
                     {
                         // record the Automatic macros
                         sw.WriteLine("Automatic macros...");
@@ -257,11 +300,16 @@ namespace RLCMacroReader
                         {
                             Console.WriteLine("Checking macro {0}...", m);
                             response = SendReceive(sp, "054 " + m.ToString("000"));
-                            ok = (response == _TIMEOUT) ? false : true;
+
+                            if (response == _TIMEOUT || response.Contains("Error"))
+                            {
+                                ok = false;
+                            }
 
                             if (!ok)
                             {
-                                break;
+                                Console.WriteLine(response);
+                                return;
                             }
 
                             else if (!response.ToLower().Contains("this macro is 0 percent full"))
@@ -271,18 +319,23 @@ namespace RLCMacroReader
                         }
 
                         sw.WriteLine("\nUser macros...");
-
+                        
                         if (ok)
                         {
                             for (int m = 500; m < 1000; m++)
                             {
                                 Console.WriteLine("Checking macro {0}...", m);
                                 response = SendReceive (sp, "054 " + m.ToString("000"));
-                                ok = (response == _TIMEOUT) ? false : true;
+
+                                if (response == _TIMEOUT || response.Contains("Error"))
+                                {
+                                    ok = false;
+                                }
 
                                 if (!ok)
                                 {
-                                    break;
+                                    Console.WriteLine(response);
+                                    return;
                                 }
 
                                 else if (!response.ToLower().Contains("this macro is 0 percent full"))
@@ -293,7 +346,10 @@ namespace RLCMacroReader
                         }
                     }
 
-                    response = SendReceive(sp, "189");
+                    if (loggedin)
+                    {
+                        response = SendReceive(sp, "189");
+                    }
                 }
 
                 else
@@ -316,26 +372,46 @@ namespace RLCMacroReader
         private static string SendReceive(SerialPort port, string msg)
         {
             string r = "";
-            byte[] rxBuf = new byte[1024];
+            int rxBufSize = 1024;
+            byte[] rxBuf = new byte[rxBufSize];
             byte[] data = Encoding.ASCII.GetBytes(msg + '\r' + '\n');
 
             try
             {
-                string TxCmd = msg.Substring(0, 3);
                 string RxCmd = "";
+                string TxCmd = msg.Substring(0, 3);
 
                 sp.DiscardInBuffer();
                 sp.DiscardOutBuffer();
                 sp.Write(data, 0, data.Length);
 
                 Task.Delay(2000).Wait();
-                int bytes = port.BaseStream.Read(rxBuf, 0, 1024);
 
-                if (bytes > 0)
+                int b;
+                int p = 0;
+                bool done = false;
+
+                while (!done && (p < rxBufSize))
                 {
-                    byte[] buf = new byte[bytes];
+                    b = port.ReadByte();
+                    rxBuf[p] = (byte)b;
 
-                    Array.Copy(rxBuf, 0, buf, 0, bytes);
+                    if (p > 4)
+                    {
+                        // stop when we see 'DTMF>'
+                        if (rxBuf[p] == '>' && rxBuf[p - 1] == 'F' && rxBuf[p - 2] == 'M' && rxBuf[p - 3] == 'T' && rxBuf[p - 4] == 'D')
+                        {
+                            done = true;
+                        }
+                    }
+
+                    p++;
+                }
+
+                if (p > 0)
+                {
+                    byte[] buf = new byte[p];
+                    Array.Copy(rxBuf, 0, buf, 0, p);
                     r = Encoding.ASCII.GetString(buf);
                     RxCmd = r.Substring(0, 3);
 
@@ -368,11 +444,7 @@ namespace RLCMacroReader
                 r = ex.Message;
             }
 
-
             return r;
-
         }
     }
-
-
 }
